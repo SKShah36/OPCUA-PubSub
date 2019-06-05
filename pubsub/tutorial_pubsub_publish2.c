@@ -34,7 +34,7 @@
 #include <signal.h>
 #include <time.h>
 #include <stdlib.h>
-
+#include <inttypes.h>
 
 UA_NodeId connectionIdent, publishedDataSetIdent, writerGroupIdent;
 UA_Variant           valueVariant;
@@ -87,14 +87,20 @@ static void updateCurrentTime(UA_Server *server, void * data) {
 
     struct timespec tp1;
     clock_gettime(CLOCK_REALTIME, &tp1);
-    UA_UInt64 tp1_total = (UA_UInt64)(tp1.tv_sec*1000000000 + tp1.tv_nsec);
+
+    char buff[21];
+    sprintf(buff, "%lld.%.9ld", (long long)tp1.tv_sec, tp1.tv_nsec);
 
     UA_Variant value;
     UA_Variant_init(&value);
-    UA_Variant_setScalar(&value, &tp1_total, &UA_TYPES[UA_TYPES_UINT64]);
+    UA_String timeString = UA_STRING(buff);
+
+    UA_Variant_setScalarCopy(&value, &timeString, &UA_TYPES[UA_TYPES_STRING]);
+
     UA_Server_writeValue(server, timeNodeId, value);
+
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
-                "[Time]: %lu", tp1_total);
+                "[Time]: %s", buff);
 
     if (samples){
         counter++;
@@ -105,79 +111,35 @@ static void updateCurrentTime(UA_Server *server, void * data) {
     }
 
 }
-
-UA_UInt32 sequence_count = 0;
-
-/*static void updateCounter(UA_Server *server, void * data) {
-
-    sequence_count++;
-
-    UA_NodeId counterNodeId = UA_NODEID_NUMERIC(1, 52525);
-    UA_Variant value;
-    UA_Variant_init(&value);
-    UA_Variant_setScalar(&value, &sequence_count, &UA_TYPES[UA_TYPES_UINT32]);
-    UA_Server_writeValue(server, counterNodeId, value);
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
-                "[Sequence]: %u", sequence_count);
-
-    if (samples){
-        counter++;
-
-        if (counter == sample_count){
-            running = false;
-        }
-    }
-
-}*/
-
-/*
-static void
-addIntegerVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent, UA_UInt32 integer) {
-    */
-/* Define the attribute of the myInteger variable node *//*
-
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_UInt32 myInteger = integer;
-    UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_UINT32]);
-    attr.description = UA_LOCALIZEDTEXT("en-US","the answer");
-    attr.displayName = UA_LOCALIZEDTEXT("en-US","the answer");
-    attr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
-    */
-/* Add the variable node to the information model *//*
-
-    UA_NodeId myIntegerNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
-    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, "the answer");
-    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
-                              parentReferenceNodeId, myIntegerName,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
-}
-*/
-
 
 static void
 addTimeVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
 
-    UA_Int64 tp1_total = 0;
     UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_Variant_setScalar(&attr.value, &tp1_total, &UA_TYPES[UA_TYPES_UINT64]);
+    UA_Variant input;
+    struct timespec tp1;
+    clock_gettime(CLOCK_REALTIME, &tp1);
 
-    attr.description = UA_LOCALIZEDTEXT("en-US","the answer");
-    attr.displayName = UA_LOCALIZEDTEXT("en-US","Clock real time");
-    attr.dataType = UA_TYPES[UA_TYPES_UINT64].typeId;
+    char buff[21];
+    sprintf(buff, "%lld.%.9ld", (long long)tp1.tv_sec, tp1.tv_nsec);
+
+    UA_String s = UA_STRING(buff);
+    UA_Variant_init(&input);
+    UA_Variant_setScalarCopy(&input, &s, &UA_TYPES[UA_TYPES_STRING]);
+
+    attr.value = input;
+    attr.description = UA_LOCALIZEDTEXT("en-US","Time to publish");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US","Time");
+    attr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
-    UA_NodeId timeNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
-    UA_QualifiedName timeName = UA_QUALIFIEDNAME(1, "the answer");
+    UA_NodeId myStringNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
+    UA_QualifiedName myStringName = UA_QUALIFIEDNAME(2, "TimeString");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_Server_addVariableNode(server, timeNodeId, parentNodeId,
-                              parentReferenceNodeId, timeName,
+    UA_Server_addVariableNode(server, myStringNodeId, parentNodeId,
+                              parentReferenceNodeId, myStringName,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
-
 }
 
 /**
@@ -278,7 +240,7 @@ static int run(UA_String *transportProfile,
     /* Details about the connection configuration and handling are located in
      * the pubsub connection tutorial */
     config->pubsubTransportLayers =
-        (UA_PubSubTransportLayer *) UA_calloc(2, sizeof(UA_PubSubTransportLayer));
+            (UA_PubSubTransportLayer *) UA_calloc(2, sizeof(UA_PubSubTransportLayer));
     if(!config->pubsubTransportLayers) {
         UA_Server_delete(server);
         return EXIT_FAILURE;
@@ -295,14 +257,13 @@ static int run(UA_String *transportProfile,
 
     addTimeVariable(server, 1, 52510);
 
-    addNewDataSetField(server, 1, 52510, "TimeInteger");
+    addNewDataSetField(server, 1, 52510, "TimeString");
 
     addWriterGroup(server);
 
     addDataSetWriter(server);
 
     UA_Server_addRepeatedCallback(server, updateCurrentTime, NULL, write_rate, NULL);
-    // UA_Server_addRepeatedCallback(server, updateCounter, NULL, write_rate, NULL);
 
     UA_StatusCode retval = UA_Server_run(server, &running);
 
@@ -317,9 +278,9 @@ usage(char *progname) {
 
 int main(int argc, char **argv) {
     UA_String transportProfile =
-        UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-udp-uadp");
+            UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-udp-uadp");
     UA_NetworkAddressUrlDataType networkAddressUrl =
-        {UA_STRING_NULL , UA_STRING("opc.udp://224.0.0.22:4840/")};
+            {UA_STRING_NULL , UA_STRING("opc.udp://224.0.0.22:4840/")};
 
     if (argc > 1) {
         if (strcmp(argv[1], "-h") == 0) {
@@ -329,7 +290,7 @@ int main(int argc, char **argv) {
             networkAddressUrl.url = UA_STRING(argv[1]);
         } else if (strncmp(argv[1], "opc.eth://", 10) == 0) {
             transportProfile =
-                UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-eth-uadp");
+                    UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-eth-uadp");
             if (argc < 3) {
                 printf("Error: UADP/ETH needs an interface name\n");
                 return EXIT_FAILURE;
@@ -337,40 +298,40 @@ int main(int argc, char **argv) {
             networkAddressUrl.networkInterface = UA_STRING(argv[2]);
             networkAddressUrl.url = UA_STRING(argv[1]);
         } else if (strcmp(argv[1], "-sample") == 0){
-                if (argc < 3){
-                    printf("Error: Number of samples not supplied\n");
+            if (argc < 3){
+                printf("Error: Number of samples not supplied\n");
+                return EXIT_FAILURE;
+            }
+
+            sample_count = atoi(argv[2]);
+            samples = true;
+            printf("samples = %d\n", sample_count);
+
+            if (argc > 3 && strcmp(argv[3], "-interval") == 0){
+                if (argc < 5){
+                    printf("Error: Interval not supplied\n");
                     return EXIT_FAILURE;
                 }
 
-                sample_count = atoi(argv[2]);
-                samples = true;
-                printf("samples = %d\n", sample_count);
+                publish_interval = atoi(argv[4]);
 
-                if (argc > 3 && strcmp(argv[3], "-interval") == 0){
-                    if (argc < 5){
-                        printf("Error: Interval not supplied\n");
-                        return EXIT_FAILURE;
-                    }
+                if (publish_interval < 50){
+                    printf("Warning: Interval cannot be less than 50 milliseconds\n");
+                    printf("Setting interval to 50 milliseconds\n");
+                    publish_interval = 50;
+                }
+                printf("interval = %d\n", publish_interval);
 
-                    publish_interval = atoi(argv[4]);
-
-                    if (publish_interval < 50){
-                        printf("Warning: Interval cannot be less than 50 milliseconds\n");
-                        printf("Setting interval to 50 milliseconds\n");
-                        publish_interval = 50;
-                    }
-                    printf("interval = %d\n", publish_interval);
-
-                    if (argc > 5 && strcmp(argv[5], "-write_rate") == 0)
-                        if (argc < 7){
+                if (argc > 5 && strcmp(argv[5], "-write_rate") == 0)
+                    if (argc < 7){
                         printf("Warning: Updation Rate not supplied. Setting write rate equal to publish_interval\n");
                         write_rate = publish_interval;
                     }
 
-                    write_rate = atoi(argv[6]);
-                }
-
+                write_rate = atoi(argv[6]);
             }
+
+        }
         else {
             printf("Error: unknown URI\n");
             return EXIT_FAILURE;
