@@ -30,7 +30,7 @@
 #include <open62541/server.h>
 #include <open62541/server_config_default.h>
 #include <open62541/server_config.h>
-
+#include <ifaddrs.h>
 #include <signal.h>
 #include <time.h>
 #include <stdlib.h>
@@ -88,8 +88,25 @@ static void updateCurrentTime(UA_Server *server, void * data) {
     struct timespec tp1;
     clock_gettime(CLOCK_REALTIME, &tp1);
 
-    char buff[21];
-    sprintf(buff, "%lld.%.9ld", (long long)tp1.tv_sec, tp1.tv_nsec);
+    struct ifaddrs *ifap, *ifa;
+    struct sockaddr_in *sa;
+    char *addr;
+    char addr2[15];
+
+    getifaddrs (&ifap);
+
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family==AF_INET) {
+            sa = (struct sockaddr_in *) ifa->ifa_addr;
+            addr = inet_ntoa(sa->sin_addr);
+            if (strncmp(addr, "192", 3) == 0){
+                strcpy(addr2, addr);
+            }
+        }
+    }
+
+    char buff[35];
+    sprintf(buff, "%s,%lld.%.9ld", addr2, (long long)tp1.tv_sec, tp1.tv_nsec);
 
     UA_Variant value;
     UA_Variant_init(&value);
@@ -119,9 +136,26 @@ addTimeVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
     UA_Variant input;
     struct timespec tp1;
     clock_gettime(CLOCK_REALTIME, &tp1);
+    long r = random()%100;
+    struct ifaddrs *ifap, *ifa;
+    struct sockaddr_in *sa;
+    char *addr;
+    char addr2[15];
 
-    char buff[21];
-    sprintf(buff, "%lld.%.9ld", (long long)tp1.tv_sec, tp1.tv_nsec);
+    getifaddrs (&ifap);
+
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family==AF_INET) {
+            sa = (struct sockaddr_in *) ifa->ifa_addr;
+            addr = inet_ntoa(sa->sin_addr);
+            if (strncmp(addr, "192", 3) == 0){
+                strcpy(addr2, addr);
+            }
+        }
+    }
+
+    char buff[35];
+    sprintf(buff, "%s-%lu,%lld.%.9ld", addr2, r, (long long)tp1.tv_sec, tp1.tv_nsec);
 
     UA_String s = UA_STRING(buff);
     UA_Variant_init(&input);
