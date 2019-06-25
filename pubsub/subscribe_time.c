@@ -34,12 +34,14 @@
 size_t counter = 0;
 size_t sample_count = 10;
 size_t poll_count1 = 0;
+size_t var_length = 5;
 
 typedef struct measurements{
     size_t sequence;
     UA_DateTime receiveTime;
     UA_DateTime currentTime;
     char *pubId;
+    UA_Double *data;
 }measurement;
 
 measurement *measure;
@@ -119,7 +121,7 @@ subscriptionPollingCallback(UA_Server *server, UA_PubSubConnection *connection) 
         UA_DateTime receivedTime = UA_DateTime_nowMonotonic();
         UA_UInt32 intVal = UA_UInt32_random();
         UA_Double doubleVal = 0.0;
-
+        size_t variant_length = 10;
 
         const UA_DataType *currentType = dsm->data.keyFrameData.dataSetFields[i].value.type;
 
@@ -151,9 +153,19 @@ subscriptionPollingCallback(UA_Server *server, UA_PubSubConnection *connection) 
         }
 
         if (currentType == &UA_TYPES[UA_TYPES_DOUBLE]) {
-            doubleVal = *(UA_Double *)dsm->data.keyFrameData.dataSetFields[i].value.data;
-            UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
-                        "Message content: [Double] \tReceived double: %f", doubleVal);
+            UA_Variant *variant = &dsm->data.keyFrameData.dataSetFields[i].value;
+            variant_length = variant->arrayLength;
+            var_length = variant_length;
+            printf("variant length %d\n", variant_length);
+            measure[poll_count1].data = (UA_Double *)UA_malloc(variant_length*sizeof(UA_Double));
+            for(size_t k = 0; k < variant_length; k++)
+            {
+                doubleVal = ((UA_Double*)variant->data)[k];
+                measure[poll_count1].data[k] = doubleVal;
+                UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
+                            "Message content: [Double] \tReceived double: %f", doubleVal);
+            }
+
         }
     }
 
@@ -172,10 +184,24 @@ subscriptionPollingCallback(UA_Server *server, UA_PubSubConnection *connection) 
 
     if (counter == sample_count){
         printf("Sample count is %u\n", sample_count);
+
         FILE *f = fopen("perf_log.csv", "w+");
+
 
         for (size_t j = 0; j < sample_count; j++){
             printf("%d,%lld,%lld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
+
+            //char* stringData = (char*)UA_malloc(sizeof(char)*var_length);
+            char* stringData[sample_count];
+
+            for (size_t i = 0; i < var_length; i++){
+                char buff[15];
+                sprintf(buff, "%f", measure[j].data[i]);
+                stringData[i] = buff;
+            }
+
+            printf("The string data is %s\n", stringData[j]);
+
             fprintf(f, "%d,%lld,%lld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
         }
 

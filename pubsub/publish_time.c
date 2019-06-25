@@ -45,6 +45,7 @@ int counter = 0;
 int sample_count = 10;
 int publish_interval = 1000;
 int write_rate = 1000;
+size_t array_size = 5;
 UA_Boolean running = true;
 UA_Boolean samples = false;
 
@@ -249,7 +250,7 @@ addPublisherVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
         if (ifa->ifa_addr->sa_family==AF_INET) {
             sa = (struct sockaddr_in *) ifa->ifa_addr;
             addr = inet_ntoa(sa->sin_addr);
-            if (strncmp(addr, "192", 3) == 0){
+            if (strncmp(addr, "172", 3) == 0){
                 strcpy(addr2, addr);
             }
         }
@@ -285,13 +286,14 @@ addDoubleArray(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
     /* Define the attribute of the myInteger variable node */
     UA_VariableAttributes attr = UA_VariableAttributes_default;
     UA_Variant v;
-    UA_Double d[9] = {1.0, 2.0, 3.0,
-                      4.0, 5.0, 6.0,
-                      7.0, 8.0, 9.0};
-    UA_Variant_setArrayCopy(&v, d, 9, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Double *d = (UA_Double *)UA_malloc(array_size*sizeof(UA_Double));
+    for (size_t i = 0; i < array_size; i++)
+    {
+        d[i] = (double)UA_UInt32_random();
+    }
+    UA_Variant_setArrayCopy(&v, d, array_size, &UA_TYPES[UA_TYPES_DOUBLE]);
 
-    UA_Variant_setScalar(&attr.value, &d, &UA_TYPES[UA_TYPES_DOUBLE]);
-
+    attr.value = v;
     attr.description = UA_LOCALIZEDTEXT("en-US","the answer");
     attr.displayName = UA_LOCALIZEDTEXT("en-US","the answer");
     attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
@@ -414,16 +416,24 @@ int main(int argc, char **argv) {
                 }
                 printf("interval = %d\n", publish_interval);
 
-                if (argc > 5 && strcmp(argv[5], "-write_rate") == 0)
+                if (argc > 5 && strcmp(argv[5], "-write") == 0)
                     if (argc < 7){
                         printf("Warning: Updation Rate not supplied. Setting write rate equal to publish_interval\n");
                         write_rate = publish_interval;
                     }
 
                 write_rate = atoi(argv[6]);
+                if (argc > 7 && strcmp(argv[7], "-array_size") == 0) {
+                    if (argc < 9){
+                        printf("Warning");
+                    }
+                    array_size = strtoul(argv[8], NULL, 0);
+                }
             }
 
         }
+
+
         else {
             printf("Error: unknown URI\n");
             return EXIT_FAILURE;
