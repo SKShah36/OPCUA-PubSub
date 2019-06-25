@@ -33,12 +33,13 @@
 
 size_t counter = 0;
 size_t sample_count = 10;
-int poll_count1 = 0;
+size_t poll_count1 = 0;
 
 typedef struct measurements{
-    int sequence;
-    long receiveTime;
-    long currentTime;
+    size_t sequence;
+    UA_DateTime receiveTime;
+    UA_DateTime currentTime;
+    char *pubId;
 }measurement;
 
 measurement *measure;
@@ -113,79 +114,74 @@ subscriptionPollingCallback(UA_Server *server, UA_PubSubConnection *connection) 
     /* Loop over the fields and print well-known content types */
     for(int i = 0; i < dsm->data.keyFrameData.fieldCount; i++) {
 
+        UA_String publisherId = UA_STRING("dummy");
+        UA_DateTime currTime = UA_DateTime_nowMonotonic();
+        UA_DateTime receivedTime = UA_DateTime_nowMonotonic();
+        UA_UInt32 intVal = UA_UInt32_random();
+        UA_Double doubleVal = 0.0;
+
+
         const UA_DataType *currentType = dsm->data.keyFrameData.dataSetFields[i].value.type;
 
         if(currentType == &UA_TYPES[UA_TYPES_STRING]) {
-            UA_String receivedTime = *(UA_String *)dsm->data.keyFrameData.dataSetFields[i].value.data;
-
+            publisherId = *(UA_String *)dsm->data.keyFrameData.dataSetFields[i].value.data;
 
             /*Convert the string to char* */
-            char* timeReceived = (char*)UA_malloc(sizeof(char)*receivedTime.length+1);
-            memcpy(timeReceived, receivedTime.data, receivedTime.length );
-            timeReceived[receivedTime.length] = '\0';
+            char* pubId = (char*)UA_malloc(sizeof(char)*publisherId.length+1);
+            memcpy(pubId, publisherId.data, publisherId.length );
+            pubId[publisherId.length] = '\0';
 
+            measure[poll_count1].pubId = pubId;
             UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
-                    //"Message content: [String] \tReceived data: %s \tSequence: %d \tPublisherID", timeReceived, sequence_no);
-                        "Message content: [String] \tReceived data: %s", timeReceived);
-
-
-            /* struct timespec tp1;
-             clock_gettime(CLOCK_REALTIME, &tp1);
-
-             char currTime[21];
-             sprintf(currTime, "%lld.%.9ld", (long long)tp1.tv_sec, tp1.tv_nsec);
-
-             measure[poll_count1].sequence = poll_count1 + 1;
-             measure[poll_count1].currentTime = strdup(currTime);
-             measure[poll_count1].receiveTime = strdup(timeReceived);
-
-             printf("%d,%s,%s\n", measure[poll_count1].sequence, measure[poll_count1].receiveTime, measure[poll_count1].currentTime);
-             poll_count1++;
-             counter++;
-
-             if (counter == sample_count){
-                 printf("Sample count is %lu", sample_count);
-                 FILE *f = fopen("perf_log.csv", "w+");
-
-                 for (size_t j = 0; j < sample_count; j++){
-                     printf("%d,%s,%s\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
-                     fprintf(f, "%d,%s,%s\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
-                 }
-
-                 fclose(f);
-                 free(measure);
-                 running = false;
-             }*/
+                        "Message content: [String] \tReceived data: %s", pubId);
         }
 
         if(currentType == &UA_TYPES[UA_TYPES_DATETIME]){
 
-            UA_DateTime receivedTime = *(UA_DateTime *)dsm->data.keyFrameData.dataSetFields[i].value.data;
+            receivedTime = *(UA_DateTime *)dsm->data.keyFrameData.dataSetFields[i].value.data;
 
-            UA_DateTime currTime = UA_DateTime_nowMonotonic();
-
-            measure[poll_count1].sequence = poll_count1 + 1;
-            measure[poll_count1].currentTime = (long)currTime;
-            measure[poll_count1].receiveTime = (long)receivedTime;
-
-            printf("%d,%ld,%ld\n", measure[poll_count1].sequence, measure[poll_count1].receiveTime, measure[poll_count1].currentTime);
-            poll_count1++;
-            counter++;
-
-            if (counter == sample_count){
-                printf("Sample count is %u\n", sample_count);
-                FILE *f = fopen("perf_log.csv", "w+");
-
-                for (size_t j = 0; j < sample_count; j++){
-                    printf("%d,%ld,%ld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
-                    fprintf(f, "%d,%ld,%ld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
-                }
-
-                fclose(f);
-                free(measure);
-                running = false;
-            }
+            measure[poll_count1].currentTime = currTime;
+            measure[poll_count1].receiveTime = receivedTime;
         }
+
+        if (currentType == &UA_TYPES[UA_TYPES_UINT32]) {
+            intVal= *(UA_UInt32 *)dsm->data.keyFrameData.dataSetFields[i].value.data;
+            UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
+                        "Message content: [Integer] \tReceived integer: %u", intVal);
+        }
+
+        if (currentType == &UA_TYPES[UA_TYPES_DOUBLE]) {
+            doubleVal = *(UA_Double *)dsm->data.keyFrameData.dataSetFields[i].value.data;
+            UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
+                        "Message content: [Double] \tReceived double: %f", doubleVal);
+        }
+    }
+
+    if(dsm->header.dataSetMessageSequenceNrEnabled){
+        UA_UInt16  sequence_no = (dsm->header.dataSetMessageSequenceNr);
+        measure[poll_count1].sequence = sequence_no;
+    }
+    else {
+        measure[poll_count1].sequence = poll_count1 + 1;
+    }
+
+
+    printf("%d,%lld,%lld\n", measure[poll_count1].sequence, measure[poll_count1].receiveTime, measure[poll_count1].currentTime);
+    poll_count1++;
+    counter++;
+
+    if (counter == sample_count){
+        printf("Sample count is %u\n", sample_count);
+        FILE *f = fopen("perf_log.csv", "w+");
+
+        for (size_t j = 0; j < sample_count; j++){
+            printf("%d,%lld,%lld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
+            fprintf(f, "%d,%lld,%lld\n", measure[j].sequence, measure[j].receiveTime, measure[j].currentTime);
+        }
+
+        fclose(f);
+        free(measure);
+        running = false;
     }
 
     cleanup:

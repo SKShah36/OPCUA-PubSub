@@ -213,6 +213,100 @@ addTimeVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
 }
 
+static void
+addIntegerVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
+    /* Define the attribute of the myInteger variable node */
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    UA_UInt32 myInteger = UA_UInt32_random();
+    UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_UINT32]);
+    attr.description = UA_LOCALIZEDTEXT("en-US","the answer");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US","the answer");
+    attr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    /* Add the variable node to the information model */
+    UA_NodeId myIntegerNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
+    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, "the answer");
+    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
+                              parentReferenceNodeId, myIntegerName,
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+}
+
+static void
+addPublisherVariable(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
+    UA_UInt32 r = UA_UInt32_random()%100;
+    struct ifaddrs *ifap, *ifa;
+    struct sockaddr_in *sa;
+    char *addr;
+    char addr2[15];
+    char buff[20];
+
+    getifaddrs (&ifap);
+
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family==AF_INET) {
+            sa = (struct sockaddr_in *) ifa->ifa_addr;
+            addr = inet_ntoa(sa->sin_addr);
+            if (strncmp(addr, "192", 3) == 0){
+                strcpy(addr2, addr);
+            }
+        }
+    }
+
+    printf("Address is %s", addr2);
+    sprintf(buff, "%s-%u", addr2, r);
+
+
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    UA_Variant input;
+    UA_String s = UA_String_fromChars(buff);
+    UA_Variant_init(&input);
+    UA_Variant_setScalarCopy(&input, &s, &UA_TYPES[UA_TYPES_STRING]);
+
+    attr.value = input;
+    attr.description = UA_LOCALIZEDTEXT("en-US","not the answer");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US","not the answer");
+    attr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    UA_NodeId myStringNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
+    UA_QualifiedName myStringName = UA_QUALIFIEDNAME(2, "PublisherID");
+    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_Server_addVariableNode(server, myStringNodeId, parentNodeId,
+                              parentReferenceNodeId, myStringName,
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+}
+
+static void
+addDoubleArray(UA_Server *server, UA_UInt16 nsIndex, UA_UInt32 numIdent) {
+    /* Define the attribute of the myInteger variable node */
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    UA_Variant v;
+    UA_Double d[9] = {1.0, 2.0, 3.0,
+                      4.0, 5.0, 6.0,
+                      7.0, 8.0, 9.0};
+    UA_Variant_setArrayCopy(&v, d, 9, &UA_TYPES[UA_TYPES_DOUBLE]);
+
+    UA_Variant_setScalar(&attr.value, &d, &UA_TYPES[UA_TYPES_DOUBLE]);
+
+    attr.description = UA_LOCALIZEDTEXT("en-US","the answer");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US","the answer");
+    attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    /* Add the variable node to the information model */
+    UA_NodeId myIntegerNodeId = UA_NODEID_NUMERIC(nsIndex, numIdent);
+    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, "the answer");
+    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
+                              parentReferenceNodeId, myIntegerName,
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+}
+
 static void stopHandler(int sign) {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
     running = false;
@@ -248,8 +342,14 @@ static int run(UA_String *transportProfile,
     addPublishedDataSet(server);
 
     addTimeVariable(server, 1, 52510);
+    addIntegerVariable(server, 1, 52501);
+    addPublisherVariable(server, 1, 52521);
+    addDoubleArray(server, 1, 52252);
 
-    addNewDataSetField(server, 1, 52510, "TimeString");
+    addNewDataSetField(server, 1, 52510, "Time");
+    addNewDataSetField(server, 1, 52501, "32-bit Integer");
+    addNewDataSetField(server, 1, 52521, "String");
+    addNewDataSetField(server, 1, 52252, "Array");
 
     addWriterGroup(server);
 
